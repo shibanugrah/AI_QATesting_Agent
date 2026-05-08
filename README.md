@@ -83,6 +83,16 @@ $env:QA_AGENT_REAL_SELENIUM="1"
 python -m qa_agent.cli run --config examples/example_site.json
 ```
 
+Optional UI runner settings:
+
+```powershell
+$env:QA_AGENT_UI_TIMEOUT="20"
+$env:QA_AGENT_UI_RETRIES="2"
+$env:QA_AGENT_HEADLESS="1"
+```
+
+Selenium failure screenshots are saved in `artifacts/screenshots` and the screenshot path is included in the test result error.
+
 ## Run Batch
 
 ```powershell
