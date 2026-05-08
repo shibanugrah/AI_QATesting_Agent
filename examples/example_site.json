@@ -1,0 +1,8 @@
+{
+  "name": "SauceDemo",
+  "base_url": "https://www.saucedemo.com",
+  "api_tests": [],
+  "ui_paths": [
+    "/"
+  ]
+}

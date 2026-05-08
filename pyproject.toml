@@ -1,0 +1,9 @@
+[project]
+name = "ai-qa-testing-agent"
+version = "0.1.0"
+description = "Phase-based AI QA testing agent scaffold"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
