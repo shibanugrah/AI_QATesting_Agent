@@ -1,0 +1,7 @@
+{
+  "name": "Example.com API Demo",
+  "base_url": "https://example.com",
+  "authorized": true,
+  "environment": "demo",
+  "api_endpoints": ["/"]
+}

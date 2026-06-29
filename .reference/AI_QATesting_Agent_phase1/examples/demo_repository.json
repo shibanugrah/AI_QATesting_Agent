@@ -1,0 +1,17 @@
+{
+  "name": "Repository Mode Placeholder",
+  "base_url": "https://example.com",
+  "authorized": true,
+  "environment": "local",
+  "test_cases": [
+    {
+      "id": "unit-placeholder",
+      "name": "Unit suite placeholder",
+      "suite": "unit",
+      "kind": "api",
+      "target": "/",
+      "expected_status": 200,
+      "priority": "medium"
+    }
+  ]
+}

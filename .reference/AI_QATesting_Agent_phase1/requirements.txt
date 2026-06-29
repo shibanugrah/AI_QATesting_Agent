@@ -1,0 +1,2 @@
+# Core runtime uses the Python standard library.
+# Install dashboard support separately with: pip install -e '.[dashboard]'

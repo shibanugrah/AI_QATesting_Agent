@@ -1,0 +1,28 @@
+{
+  "name": "Example.com Smoke Demo",
+  "base_url": "https://example.com",
+  "authorized": true,
+  "environment": "demo",
+  "test_cases": [
+    {
+      "id": "smoke-homepage",
+      "name": "Homepage returns the Example Domain content",
+      "suite": "smoke",
+      "kind": "ui",
+      "target": "/",
+      "expected_status": 200,
+      "expected_text": "Example Domain",
+      "priority": "critical",
+      "tags": ["release-blocker", "homepage"]
+    },
+    {
+      "id": "api-example-homepage",
+      "name": "Homepage endpoint returns 200",
+      "suite": "api",
+      "kind": "api",
+      "target": "/",
+      "expected_status": 200,
+      "priority": "high"
+    }
+  ]
+}
