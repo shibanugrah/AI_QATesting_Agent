@@ -12,8 +12,8 @@ from pydantic import ValidationError
 from qa_engine import Engine, RunRequest
 from qa_engine.browser import BrowserOutput
 from qa_engine.domain import APIEndpoint, Policy, Project
-from qa_engine.process import environment, execute
-from qa_engine.repository import command_argv
+from qa_engine.process import ProcessResult, environment, execute
+from qa_engine.repository import command_argv, npm_cli
 from qa_engine.security import BudgetExceeded, PolicyBlocked, Redactor, SafeHTTP, SecretProvider, URLGuard, fingerprint
 from tests.engine_fixtures import make_repository, repository_project, web_fixture, web_project
 
@@ -362,6 +362,72 @@ def test_mixed_project_executes_both_native_unit_suites(tmp_path):
     assert {c.id for c in result.checks} == {"unit-pytest_unit", "unit-npm_unit"}
     assert next(c for c in result.checks if c.id == "unit-pytest_unit").status == "SUCCEEDED"
     assert next(c for c in result.checks if c.id == "unit-npm_unit").status == "FAILED"
+
+
+@pytest.mark.skipif(not npm_cli(), reason="Node/npm is unavailable")
+@pytest.mark.parametrize("kind,script", [("unit", "test"), ("integration", "test:integration"), ("regression", "test:regression")])
+def test_node_builtin_runner_zero_tests_cannot_succeed(tmp_path, kind, script):
+    repo = make_repository(tmp_path / "repo", npm=True)
+    package = json.loads((repo / "package.json").read_text())
+    package["scripts"][script] = "node --test"
+    (repo / "package.json").write_text(json.dumps(package))
+    project = repository_project(repo, required=[kind])
+    project.policy.diagnostic_retries = 0
+    project.policy.allowed_commands.append("npm_" + kind)
+    engine = Engine(tmp_path / "data")
+    engine.enroll(project)
+
+    result = engine.verify_change(project.id, profiles=[kind])
+
+    check = next(c for c in result.checks if c.id == f"{kind}-npm_{kind}")
+    assert check.attempts[0].exit_code == 0
+    assert check.status == "ERROR"
+    assert check.classification == "INFRASTRUCTURE_ERROR"
+    assert check.reason == "NO_EXECUTED_TEST_CASES"
+    assert check.attempts[0].details["test_result"]["runner"] == "node:test"
+    assert check.attempts[0].details["test_result"]["summary"]["tests"] == 0
+    assert result.gate.decision != "PASS"
+    assert "MANDATORY_CHECK_NOT_EXECUTED_SUCCESSFULLY" in result.gate.reason_codes
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        "'eslint' is not recognized as an internal or external command, operable program or batch file.",
+        "sh: 1: eslint: not found",
+    ],
+)
+def test_missing_project_lint_tool_is_environment_error_with_evidence(tmp_path, output):
+    repo = make_repository(tmp_path / "repo", npm=True)
+    package = json.loads((repo / "package.json").read_text())
+    package["scripts"]["lint"] = "eslint src --ext .js"
+    package["devDependencies"] = {"eslint": "^9.0.0"}
+    (repo / "package.json").write_text(json.dumps(package))
+    project = repository_project(repo, required=["lint"])
+    project.policy.diagnostic_retries = 0
+    engine = Engine(tmp_path / "data")
+    engine.enroll(project)
+    process = ProcessResult(
+        argv=command_argv("npm_lint"),
+        exit_code=1,
+        stdout="",
+        stderr=output,
+        duration_ms=1,
+    )
+
+    with patch("qa_engine.executors.execute", return_value=process):
+        result = engine.verify_change(project.id, profiles=["lint"])
+
+    assert result.checks, result.model_dump_json(indent=2)
+    check = next(c for c in result.checks if c.kind == "lint")
+    assert check.status == "ERROR"
+    assert check.classification == "INFRASTRUCTURE_ERROR"
+    assert check.reason == "PROJECT_DEPENDENCIES_NOT_INSTALLED"
+    assert check.classification != "PRODUCT_REGRESSION"
+    assert check.attempts[0].details["argv"] == process.argv
+    assert check.attempts[0].details["stderr"] == output
+    assert check.attempts[0].evidence
+    assert result.gate.decision == "REVIEW_REQUIRED"
 
 
 def test_child_outliving_parent_is_terminated(tmp_path):
