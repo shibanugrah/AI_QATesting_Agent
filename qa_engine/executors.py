@@ -5,13 +5,14 @@ import time
 import ast
 import hashlib
 import http.client
+import re
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from qa_engine.domain import Attempt, now
 from qa_engine.process import execute
-from qa_engine.repository import command_argv
+from qa_engine.repository import command_argv, package_data
 from qa_engine.security import BudgetExceeded, PolicyBlocked
 
 
@@ -77,8 +78,14 @@ class Executors:
                     raise PolicyBlocked("INVALID_JUNIT_EVIDENCE")
         code = None
         status = "SUCCEEDED" if result.exit_code == 0 else "FAILED"
+        npm_readiness = npm_execution_readiness(self.project.repository, item.command_id)
+        node_test = node_test_result(self.project.repository, item.command_id, result.exit_code, result.stdout, result.stderr)
         if result.timed_out or result.truncated:
             status, code = "ERROR", "PROCESS_TIMEOUT" if result.timed_out else "OUTPUT_LIMIT_EXCEEDED"
+        elif result.exit_code and npm_readiness:
+            status, code = "ERROR", npm_readiness["reason"]
+        elif node_test:
+            status, code = node_test["status"], node_test["failure_code"]
         elif result.exit_code:
             if item.command_id.startswith("pytest") and result.exit_code in {2, 3, 4, 5}:
                 status, code = "ERROR", "TEST_RUNNER_ERROR_OR_NO_TESTS"
@@ -91,6 +98,10 @@ class Executors:
             "truncated": result.truncated,
             "test_cases": test_cases,
         }
+        if npm_readiness:
+            details["execution_readiness"] = npm_readiness
+        if node_test:
+            details["test_result"] = {key: value for key, value in node_test.items() if key not in {"status", "failure_code"}}
         if item.command_id.startswith("pytest_") and status == "SUCCEEDED" and (not test_cases or all(t["skipped"] for t in test_cases)):
             status, code = "ERROR", "NO_EXECUTED_TEST_CASES"
         elif item.mandatory and status == "SUCCEEDED" and any(t["skipped"] for t in test_cases):
@@ -161,6 +172,73 @@ class Executors:
             failure_code=None if passed else "API_ASSERTION_FAILED",
             details={"responses": responses},
         )
+
+
+NPM_SCRIPTS = {
+    "npm_lint": "lint",
+    "npm_type": "typecheck",
+    "npm_build": "build",
+    "npm_unit": "test",
+    "npm_integration": "test:integration",
+    "npm_regression": "test:regression",
+}
+NPM_TEST_COMMANDS = {"npm_unit", "npm_integration", "npm_regression"}
+
+
+def npm_script(repository, command_id):
+    script_name = NPM_SCRIPTS.get(command_id)
+    script = package_data(repository).get("scripts", {}).get(script_name) if script_name else None
+    return script if isinstance(script, str) else ""
+
+
+def npm_execution_readiness(repository, command_id):
+    """Describe a missing declared project-local npm tool without installing it."""
+    script = npm_script(repository, command_id)
+    match = re.match(r"\s*([@\w./-]+)", script)
+    if not match:
+        return None
+    tool = Path(match.group(1)).name.lower()
+    tool = re.sub(r"\.(?:cmd|exe|ps1)$", "", tool)
+    manifest = package_data(repository)
+    dependencies = {}
+    for group in ("dependencies", "devDependencies", "optionalDependencies"):
+        declared = manifest.get(group, {})
+        if isinstance(declared, dict):
+            dependencies.update(declared)
+    if tool not in dependencies:
+        return None
+    bin_dir = Path(repository) / "node_modules" / ".bin"
+    if any((bin_dir / (tool + suffix)).is_file() for suffix in ("", ".cmd", ".exe", ".ps1")):
+        return None
+    return {
+        "state": "NOT_READY",
+        "reason": "PROJECT_DEPENDENCIES_NOT_INSTALLED" if not (Path(repository) / "node_modules").is_dir() else "NATIVE_TOOL_UNAVAILABLE",
+        "tool": tool,
+    }
+
+
+def node_test_result(repository, command_id, exit_code, stdout, stderr):
+    """Interpret the stable summary protocol emitted by Node's built-in test runner."""
+    if command_id not in NPM_TEST_COMMANDS or not re.match(r"\s*node(?:\.exe)?\s+--test(?:[=\s]|$)", npm_script(repository, command_id)):
+        return None
+    output = stdout + "\n" + stderr
+    fields = {
+        match.group(1): int(match.group(2))
+        for match in re.finditer(r"(?m)^\s*#\s+(tests|suites|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", output)
+    }
+    result = {"runner": "node:test", "summary": fields}
+    if "tests" not in fields:
+        failure_code = "TEST_RUNNER_ERROR" if exit_code else "TEST_EVIDENCE_UNINTERPRETABLE"
+        return {**result, "status": "ERROR", "failure_code": failure_code}
+    if fields["tests"] == 0 or fields.get("skipped", 0) == fields["tests"]:
+        return {**result, "status": "ERROR", "failure_code": "NO_EXECUTED_TEST_CASES"}
+    if fields.get("fail", 0) > 0:
+        return {**result, "status": "FAILED", "failure_code": "TEST_FAILURE"}
+    if exit_code:
+        return {**result, "status": "ERROR", "failure_code": "TEST_RUNNER_ERROR"}
+    if fields.get("pass", 0) + fields.get("skipped", 0) < fields["tests"]:
+        return {**result, "status": "ERROR", "failure_code": "TEST_EVIDENCE_UNINTERPRETABLE"}
+    return {**result, "status": "SUCCEEDED", "failure_code": None}
 
 
 def test_source_hash(repository, classname, name):
