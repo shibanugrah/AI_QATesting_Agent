@@ -1,0 +1,16 @@
+CREATE TABLE projects(id TEXT PRIMARY KEY, config TEXT NOT NULL, config_hash TEXT NOT NULL, enrolled_at TEXT NOT NULL);
+CREATE TABLE repositories(project_id TEXT PRIMARY KEY REFERENCES projects(id), path TEXT NOT NULL);
+CREATE TABLE environments(project_id TEXT REFERENCES projects(id), id TEXT, PRIMARY KEY(project_id,id));
+CREATE TABLE runs(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), status TEXT NOT NULL, result TEXT NOT NULL, result_hash TEXT NOT NULL, UNIQUE(project_id,id));
+CREATE TABLE stages(project_id TEXT NOT NULL, run_id TEXT NOT NULL, stage_id INTEGER NOT NULL, record TEXT NOT NULL, PRIMARY KEY(run_id,stage_id), FOREIGN KEY(project_id,run_id) REFERENCES runs(project_id,id));
+CREATE TABLE events(id INTEGER PRIMARY KEY, project_id TEXT NOT NULL, run_id TEXT NOT NULL, stage_id INTEGER, at TEXT NOT NULL, status TEXT NOT NULL, FOREIGN KEY(project_id,run_id) REFERENCES runs(project_id,id));
+CREATE TABLE checks(project_id TEXT NOT NULL, run_id TEXT NOT NULL, check_id TEXT NOT NULL, record TEXT NOT NULL, PRIMARY KEY(run_id,check_id), FOREIGN KEY(project_id,run_id) REFERENCES runs(project_id,id));
+CREATE TABLE attempts(project_id TEXT NOT NULL, run_id TEXT NOT NULL, check_id TEXT NOT NULL, number INTEGER NOT NULL, record TEXT NOT NULL, PRIMARY KEY(run_id,check_id,number), FOREIGN KEY(project_id,run_id) REFERENCES runs(project_id,id), FOREIGN KEY(run_id,check_id) REFERENCES checks(run_id,check_id));
+CREATE TABLE artifacts(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, run_id TEXT NOT NULL, record TEXT NOT NULL, FOREIGN KEY(project_id,run_id) REFERENCES runs(project_id,id));
+CREATE TABLE findings(id INTEGER PRIMARY KEY, project_id TEXT NOT NULL, run_id TEXT NOT NULL, record TEXT NOT NULL, FOREIGN KEY(project_id,run_id) REFERENCES runs(project_id,id));
+CREATE TABLE incidents(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, run_id TEXT NOT NULL, check_id TEXT NOT NULL, fingerprint TEXT NOT NULL, FOREIGN KEY(project_id,run_id) REFERENCES runs(project_id,id));
+CREATE TABLE memory_records(id TEXT PRIMARY KEY REFERENCES incidents(id), project_id TEXT NOT NULL REFERENCES projects(id), state TEXT NOT NULL, policy_hash TEXT NOT NULL, expires_at TEXT NOT NULL, record TEXT NOT NULL);
+CREATE VIRTUAL TABLE memory_fts USING fts5(memory_id UNINDEXED, project_id UNINDEXED, text);
+CREATE TABLE reviews(id INTEGER PRIMARY KEY, project_id TEXT REFERENCES projects(id), subject_id TEXT NOT NULL, decision TEXT NOT NULL, reviewer TEXT NOT NULL, at TEXT NOT NULL);
+CREATE INDEX runs_project ON runs(project_id);
+CREATE INDEX memory_trust ON memory_records(project_id,state,expires_at);

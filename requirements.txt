@@ -1,6 +1,2 @@
-# Runtime dependency for the current prototype dashboard.
-streamlit>=1.37.0
-
-# Optional real-browser path is intentionally not required by default.
-# Install separately only when using QA_AGENT_REAL_SELENIUM=1:
-#   pip install selenium
+# Intentional compatibility entry point; pyproject.toml owns dependencies.
+-e .[dev]

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "qa-engine-self",
+  "repository": "..",
+  "environment": "local",
+  "policy": {
+    "version": "v1",
+    "required": ["unit", "lint", "build"],
+    "allowed_commands": ["pytest_unit", "ruff", "python_build"],
+    "timeout_seconds": 300,
+    "diagnostic_retries": 0,
+    "regression_checks": ["unit"]
+  }
+}
