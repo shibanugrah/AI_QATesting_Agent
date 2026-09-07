@@ -1,0 +1,50 @@
+name: QA Engine verification
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  engine:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -e '.[dev]'
+      - run: npm ci --prefix browser_worker
+      - run: npx --prefix browser_worker playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+      - run: npm run typecheck --prefix browser_worker
+      - run: python -m pytest -q --junitxml=artifacts/engine-tests.xml
+      - run: python tools/verify_clean_install.py
+      - run: python -m qa_engine.acceptance --output artifacts/acceptance
+      - name: Enroll owner-controlled engine checkout
+        run: python -m qa_engine --data-dir artifacts/ci-engine enroll .github/qa-project.json
+      - name: Deterministic QA gate
+        run: python -m qa_engine --data-dir artifacts/ci-engine run qa-engine-self --profile unit --profile lint --profile build > artifacts/ci-result.json
+      - name: Publish machine evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-engine-evidence
+          path: artifacts/
+          retention-days: 14
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: cat artifacts/acceptance/summary.md >> "$GITHUB_STEP_SUMMARY"

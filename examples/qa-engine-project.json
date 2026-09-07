@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "my-authorized-project",
+  "repository": "../path-to-your-trusted-repository",
+  "environment": "staging",
+  "policy": {
+    "version": "v1",
+    "required": ["unit", "api", "browser_e2e"],
+    "allowed_commands": ["pytest_unit"],
+    "allowed_hosts": ["staging.example.com"],
+    "allowed_ports": [443],
+    "allow_mutation": true,
+    "regression_checks": ["unit"],
+    "conditional": [{"pattern": "*auth*", "required": ["browser_e2e"]}]
+  },
+  "api_endpoints": [{"id": "health", "url": "https://staging.example.com/health", "tags": ["api", "smoke"], "expected_status": 200, "expected_json": {"ok": true}}],
+  "credentials": {"login_password": "QA_STAGING_PASSWORD"},
+  "journeys": [{
+    "id": "login",
+    "profiles": [{"name": "desktop", "width": 1280, "height": 720}, {"name": "mobile", "width": 390, "height": 844}],
+    "steps": [
+      {"action": "goto", "value": "https://staging.example.com/login"},
+      {"action": "fill", "selector": "#username", "value": "dedicated-qa-account"},
+      {"action": "fill", "selector": "#password", "credential_ref": "login_password"},
+      {"action": "click", "selector": "button[type=submit]"},
+      {"action": "expect_visible", "selector": "[data-testid=dashboard]"}
+    ]
+  }]
+}
