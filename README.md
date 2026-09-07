@@ -1,298 +1,149 @@
-# AI QA Testing Agent
+# QA Engine — Legacy Prototype Baseline
 
-A **local QA automation scaffold** that runs configured API and UI checks, creates HTML reports, stores lightweight failure history, and requires human approval before report delivery preparation.
+This repository is the **authoritative legacy/prototype baseline** that will be used for the separate QA Engine rebuild.
 
-> **Current status:** prototype / local development tool. It is not yet a production platform, a full end-to-end testing system, semantic RAG, or an autonomous coding agent.
+The future product definition is:
 
-The product direction is documented in [PRD2.md](PRD2.md): a private, local, Codex-assisted QA learning loop first; selective testing, local QA Memory, MCP, and shared-platform capabilities later.
+> **QA Engine is an independent software verification layer for humans and AI agents that converts software changes and running applications into reproducible evidence and deterministic quality decisions.**
 
----
+Core invariant:
 
-## What works today
+> **Builder ≠ Verifier.**
 
-- Generate deterministic API checks from configured endpoints.
-- Run API checks with HTTP status and optional response-text expectations.
-- Run basic UI/page-load checks.
-- Optionally use Selenium for browser loading and failure screenshots.
-- Produce HTML reports.
-- Store reports in a local human-review queue.
-- Approve or reject reports before delivery preparation.
-- Prepare approved report delivery as a local outbox file.
-- Run a basic Streamlit dashboard.
-- Run multiple target configurations through the current batch command.
-- Store lightweight local failure-memory data for later similarity lookup.
+This preparation commit does **not** implement the future QA Engine architecture.
 
-## What does **not** work yet
+## Authoritative active implementation
 
-- Selectable `smoke`, `unit`, `api`, `integration`, `e2e`, or regression suites.
-- Repository-aware unit-test execution.
-- Real browser user journeys such as login, form submission, checkout, or role-based flows.
-- Playwright as the default browser runner.
-- Strict Pydantic/JSON-schema configuration validation.
-- Test-plan preview or dry-run mode.
-- SQLite-backed QA Memory with human-approved learning records.
-- Codex hooks, MCP, GitHub Actions integration, or a hosted platform.
-- Real email sending; the current MVP writes an outbox file.
+Unless a later approved specification changes this, the active prototype source is the code in the repository root, including:
 
-Do not describe the project as an autonomous AI QA agent, semantic RAG system, or production-ready platform until those features are implemented and validated.
+- `qa_agent/` — CLI, pipeline, models, reporting helpers
+- `agents/` — current deterministic test generation/failure-analysis helpers
+- `executor/` — current API and optional Selenium/page-load runners
+- `human_review/` — report review/approval prototype
+- `reports/` — HTML report generation
+- `rag/` — legacy lightweight failure-history prototype
+- `scheduler/` — current batch/job prototype
+- `dashboard/` — current Streamlit viewer
+- `email/` — current local outbox preparation
+- `tests/` — current automated tests
+- `examples/` — current example configuration
 
----
+Historical Phase-1 code, old roadmap material, and saved patch/worktree experiments are **not implementation authority**. Their preservation map is in [`docs/history/README.md`](docs/history/README.md).
 
-## Safety boundary
+## What the current prototype does
 
-Use this tool only against systems you own or are explicitly authorized to test.
+- Generates deterministic API and UI/page-load checks from configuration.
+- Checks API status and optional response text.
+- Runs basic UI/page-load checks; Selenium can be enabled explicitly.
+- Captures Selenium failure screenshots when available.
+- Produces HTML reports.
+- Stores reports in a local review queue.
+- Supports approve/reject before local outbox preparation.
+- Includes a basic Streamlit dashboard.
+- Includes a batch prototype and lightweight failure-history prototype.
 
-The current runner can make requests to a configured URL. Do not point it at private systems, third-party services, or production systems without clear authorization. Do not store credentials in repository configuration files, reports, or artifacts.
+## What is not implemented yet
 
----
+The current baseline is **not** the final QA Engine. It does not yet provide the approved V1 architecture such as repository/change verification, deterministic release gating, project-scoped SQLite QA Memory, Playwright E2E, GitHub PR/SHA verification, the 30 observable checkpoints, or the future Python API.
 
-## Quick start — current implementation
+Do not present roadmap capabilities as working features.
 
-### 1. Clone and create a virtual environment
+## Quick start — current prototype only
+
+### 1. Create and activate a virtual environment
 
 ```bash
-git clone https://github.com/shibanugrah/AI_QATesting_Agent.git
-cd AI_QATesting_Agent
 python -m venv .venv
 ```
 
-Activate it:
+Windows PowerShell:
 
 ```powershell
-# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
 ```
 
+macOS/Linux:
+
 ```bash
-# macOS / Linux
 source .venv/bin/activate
 ```
 
-### 2. Install dependencies
+### 2. Install current runtime dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run the current test suite
+The standard page-load runner uses the Python standard library. Selenium is optional and is not required for the default test path.
 
-The current repository documents and uses the standard-library test runner. Pytest standardization is planned in Phase 0 of [PRD2.md](PRD2.md).
+To use the optional real Selenium path:
+
+```bash
+pip install selenium
+```
+
+### 3. Run the current automated tests
 
 ```bash
 python -m unittest discover -s tests
 ```
 
-### 4. Create a controlled target configuration
+The current baseline uses `unittest`-compatible tests. A later rebuild may choose different tooling, but this preparation pass does not change the test architecture.
 
-Use `api_endpoints` in new configuration files. The existing `examples/example_site.json` uses an older `api_tests` key and will be corrected as part of Phase 0.
+### 4. Run the current example
 
-Create `examples/my_local_target.json`:
-
-```json
-{
-  "name": "My Approved Test Target",
-  "base_url": "https://staging.example.com",
-  "api_endpoints": ["/api/health"],
-  "ui_paths": ["/", "/login"]
-}
-```
-
-Replace the sample URL with a local, demo, or staging system you own or are authorized to test.
-
-### 5. Run a QA pipeline
+`examples/example_site.json` uses the active key `api_endpoints`.
 
 ```bash
-python -m qa_agent.cli run --config examples/my_local_target.json
+python -m qa_agent.cli run --config examples/example_site.json
 ```
 
-Expected output includes:
+Only run remote checks against systems you own or are explicitly authorized to test.
 
-- a report ID;
-- an HTML report path;
-- `Approval status: pending`.
-
-Generated files are stored under:
-
-```text
-artifacts/reports/
-artifacts/review_queue/
-```
-
-### 6. Review, approve, and prepare delivery
-
-```bash
-python -m qa_agent.cli approve <REPORT_ID> --notes "Reviewed locally"
-python -m qa_agent.cli send-email <REPORT_ID> --to qa@example.com
-```
-
-Delivery is blocked until approval. The current MVP writes a prepared message to:
-
-```text
-artifacts/outbox/<REPORT_ID>.eml.txt
-```
-
-### 7. Optional: start the dashboard
+### 5. Optional dashboard
 
 ```bash
 streamlit run dashboard/streamlit_app.py
 ```
 
-The current dashboard lets you enter a target, run configured API/UI checks, inspect report counts and analysis, approve or reject a report, prepare approved delivery, and render the generated HTML report.
-
-### 8. Optional: enable Selenium page loading
-
-The default UI runner uses a simple page-load check. To enable the optional Selenium path:
+### 6. Optional Selenium mode
 
 ```powershell
-pip install selenium
 $env:QA_AGENT_REAL_SELENIUM="1"
-$env:QA_AGENT_UI_TIMEOUT="20"
-$env:QA_AGENT_UI_RETRIES="2"
-$env:QA_AGENT_HEADLESS="1"
-python -m qa_agent.cli run --config examples/my_local_target.json
+python -m qa_agent.cli run --config examples/example_site.json
 ```
 
-When Selenium fails, screenshots are written under `artifacts/screenshots/` when available.
+## Locked future direction — context, not implementation
 
-### 9. Optional: run a batch
+The later QA Engine build is expected to follow these principles:
 
-```bash
-python -m qa_agent.cli batch --configs examples/my_local_target.json examples/my_local_target.json --parallelism 2
-```
+- deterministic-first verification;
+- LLM output is never evidence;
+- owner project policy outranks AI planning;
+- policy-mandatory checks must execute successfully before a future gate can return PASS;
+- 30 checkpoints are an observable execution contract, not a rigid internal pipeline;
+- internal orchestration may use a DAG/state machine;
+- repository-native capabilities are discovered instead of forcing identical checks on every project;
+- Python remains the core;
+- the future browser boundary is a small TypeScript Playwright Test worker;
+- Chromium only for initial V1 browser execution;
+- SQLite + FTS5 before vector retrieval;
+- GitHub is first-class and read-only by default;
+- project, credential, memory, and baseline isolation are mandatory.
 
-**Known limitation:** retry behavior needs correction before it should be relied on for critical batch work. See [PRD2.md](PRD2.md).
+These are architectural constraints for the later build prompt. They are **not claims about current code**.
 
----
+## Safety
 
-## Current architecture
+- Test only owned or explicitly authorized targets.
+- Do not commit credentials, cookies, tokens, or secrets.
+- Do not use the current prototype for destructive or offensive testing.
+- Do not treat generated prose or AI suggestions as evidence.
 
-```text
-CLI / Streamlit dashboard
-          ↓
-      QA pipeline
- ┌────────┼─────────┐
- │        │         │
-Test   API runner  UI runner
-Generator            ↓
-          Failure analysis + lightweight memory
-                         ↓
-                   HTML report
-                         ↓
-              Human review queue
-                         ↓
-            Approved outbox preparation
-```
+## Historical material
 
----
-
-## Codex-first future workflow
-
-The next product stage is local and interactive:
-
-```text
-You + personal Codex sign-in
-            ↓
-    Local repository changes
-            ↓
- AI_QATesting_Agent test planner
-            ↓
- Selected tests + artifacts + QA Memory
-            ↓
-  Human-approved lessons for future work
-```
-
-The intended workflow is:
-
-1. Start Codex locally in your repository.
-2. Ask it to inspect a change and identify the smallest relevant tests.
-3. Preview a test plan.
-4. Run only selected suites such as smoke or unit tests.
-5. Save logs, failures, diffs, screenshots, and rerun results locally.
-6. Retrieve similar prior validated cases before asking Codex to repair an issue.
-7. Promote a lesson to trusted QA Memory only after a human review and passing validation.
-
-This future workflow will use your interactive personal Codex sign-in locally. It must not reuse personal Codex credentials in CI, a server, a VPS, or background automation.
-
----
-
-## Planned test profiles
-
-These are target capabilities, not current commands:
-
-| Profile | Purpose | Target mode |
-|---|---|---|
-| Smoke | Fast critical-path confidence | URL or repository |
-| Unit | Isolated code behavior | Repository only |
-| API | Endpoint and contract checks | URL or repository |
-| Integration | Service and persistence checks | Repository or approved staging |
-| E2E | Browser user journeys | URL or repository |
-| Regression | Broader stable coverage | URL or repository |
-| Accessibility | Basic accessibility checks | URL or repository |
-| Visual | Screenshot baseline comparison | URL or repository |
-| Security baseline | Safe defensive checks only | Owned/authorized targets |
-
-After Phase 1, commands will follow this pattern:
-
-```bash
-python -m qa_agent.cli plan --config examples/demo_smoke.json --suite smoke
-python -m qa_agent.cli run --config examples/demo_smoke.json --suite smoke
-python -m qa_agent.cli run --config examples/demo_smoke.json --suite smoke --dry-run
-```
-
-These commands are documented as a roadmap only. They do not exist in the current codebase.
-
----
-
-## Roadmap
-
-### Phase 0 — Stabilize
-
-- Standardize on `api_endpoints`.
-- Add strict configuration validation.
-- Standardize on Pytest.
-- Correct or clearly document batch retry behavior.
-- Add `AGENTS.md` for local Codex work.
-
-### Phase 1 — Selective orchestration
-
-- Add test suites, `RunRequest`, `TestPlan`, and backend filtering.
-- Add plan, run, and dry-run support.
-- Add suite selection and plan preview to the dashboard.
-- Prove behavior with automated tests.
-
-### Phase 2 — Better execution evidence
-
-- Add repository-aware Pytest execution.
-- Add Playwright browser scenarios.
-- Add traces, screenshots, console logs, and network artifacts.
-- Add richer API assertions.
-
-### Phase 3 — Local QA Memory
-
-- Add SQLite-backed learning records.
-- Capture validated test/fix evidence.
-- Add review, approval, redaction, and deterministic retrieval.
-- Add trusted local Codex hooks only after the CLI workflow is stable.
-
-### Phase 4+ — Semantic retrieval, MCP, and deployment
-
-- Add locally hosted semantic retrieval only after structured memory works.
-- Add local MCP tools for the owner’s workflow.
-- Add provider-neutral integrations later.
-- Containerize and deploy only after the local system has proved useful.
-
-Read [PRD2.md](PRD2.md) for detailed requirements, data models, safety boundaries, acceptance criteria, and the initial Codex build prompt.
-
----
-
-## Repository documentation
-
-- [PRD2.md](PRD2.md) — product requirements and roadmap.
-- `AGENTS.md` — planned repository instructions for Codex and other coding agents.
-- `docs/` — planned architecture, test profile, QA Memory, security, Codex workflow, and deployment documents.
-
----
+See [`docs/history/README.md`](docs/history/README.md) for the archived PRD and exact commit references for the removed `.reference` Phase-1 bundle, saved patch, and working-tree snapshot.
 
 ## License
 
-No license file is currently included. Add an appropriate open-source license before inviting reuse or external contributions.
+No license file is currently included. Decide licensing before external/client reuse or inviting outside contributions.
