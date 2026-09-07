@@ -193,7 +193,9 @@ def command_argv(command_id):
         "pytest_regression": [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "regression"],
         "ruff": [sys.executable, "-m", "ruff", "check", "."],
         "mypy": [sys.executable, "-m", "mypy", "."],
-        "python_build": [sys.executable, "-m", "build", "--no-isolation"],
+        # Let the PEP 517 frontend provision the repository's declared build backend.
+        # The QA Engine environment is deliberately not the repository build environment.
+        "python_build": [sys.executable, "-m", "build"],
         "pip_audit": [sys.executable, "-m", "pip_audit", "-r", "requirements.txt", "--no-deps", "--disable-pip", "--format", "json"],
     }
     for kind, script in [

@@ -1,6 +1,8 @@
 import json
+import importlib.util
 import socket
 import sys
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,6 +13,7 @@ from qa_engine import Engine, RunRequest
 from qa_engine.browser import BrowserOutput
 from qa_engine.domain import APIEndpoint, Policy, Project
 from qa_engine.process import environment, execute
+from qa_engine.repository import command_argv
 from qa_engine.security import BudgetExceeded, PolicyBlocked, Redactor, SafeHTTP, SecretProvider, URLGuard, fingerprint
 from tests.engine_fixtures import make_repository, repository_project, web_fixture, web_project
 
@@ -64,6 +67,55 @@ def test_unknown_command_id_never_executes(tmp_path):
         result = engine.verify_change(project.id)
     process.assert_not_called()
     assert result.gate.decision == "REVIEW_REQUIRED"
+
+
+def test_python_build_uses_declared_pep517_backend_in_isolation(tmp_path):
+    backend = "qa_engine_isolation_backend"
+    assert importlib.util.find_spec(backend) is None
+    wheel_dir = tmp_path / "wheels"
+    wheel_dir.mkdir()
+    wheel = wheel_dir / "qa_engine_isolation_backend-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(
+            backend + ".py",
+            r"""from pathlib import Path
+import zipfile
+
+
+def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
+    wheel = Path(wheel_directory) / 'isolated_fixture-0.0.0-py3-none-any.whl'
+    with zipfile.ZipFile(wheel, 'w') as output:
+        output.writestr('isolated_fixture/__init__.py', '')
+        output.writestr('isolated_fixture-0.0.0.dist-info/METADATA', 'Metadata-Version: 2.1\nName: isolated-fixture\nVersion: 0.0.0\n')
+        output.writestr('isolated_fixture-0.0.0.dist-info/WHEEL', 'Wheel-Version: 1.0\nGenerator: fixture\nRoot-Is-Purelib: true\nTag: py3-none-any\n')
+        output.writestr('isolated_fixture-0.0.0.dist-info/RECORD', '')
+    return wheel.name
+""",
+        )
+        archive.writestr("qa_engine_isolation_backend-1.0.dist-info/METADATA", "Metadata-Version: 2.1\nName: qa-engine-isolation-backend\nVersion: 1.0\n")
+        archive.writestr("qa_engine_isolation_backend-1.0.dist-info/WHEEL", "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+        archive.writestr("qa_engine_isolation_backend-1.0.dist-info/RECORD", "")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        """[build-system]
+requires = [\"qa-engine-isolation-backend==1.0\"]
+build-backend = \"qa_engine_isolation_backend\"
+
+[project]
+name = \"isolated-fixture\"
+version = \"0.0.0\"
+"""
+    )
+    result = execute(
+        [*command_argv("python_build"), "--wheel"],
+        project,
+        timeout=30,
+        extra_env={"PIP_NO_INDEX": "1", "PIP_FIND_LINKS": str(wheel_dir)},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert (project / "dist" / "isolated_fixture-0.0.0-py3-none-any.whl").is_file()
+    assert importlib.util.find_spec(backend) is None
 
 
 @pytest.mark.parametrize(
